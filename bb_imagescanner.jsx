@@ -1,243 +1,1 @@
-// this script is written
-// for Bitmaoboogie and [Reporter Ohne Grenzen]
-// 
-// Copyright (c)  2013
-// Fabian "fabiantheblind" Morón Zirfas
-// Permission is hereby granted, free of charge, to any
-// person obtaining a copy of this software and associated
-// documentation files (the "Software"), to deal in the Software
-// without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense,
-// and/or sell copies of the Software, and to  permit persons to
-// whom the Software is furnished to do so, subject to
-// the following conditions:
-// The above copyright notice and this permission notice
-// shall be included in all copies or substantial portions of the Software.
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF  CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTIO
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// see also http://www.opensource.org/licenses/mit-license.php
-
-(function(thisObj){
-// basic panel
-bb_imagescanner(thisObj);
-
- function bb_imagescanner(thisObj){
-
-// this is global
-bb_data =  {
-  'text':"",
-  'scanres':null,
-  'imagecolors':[],
-  'stepval':20,
-  'imagewidth':0,
-  'imageheight':0
-};
-
-
-///   THIS WILL CHECK IF PANEL IS DOCKABLE OR FLAOTING WINDOW  
-var win   = buildUI(thisObj );
-if ((win !== null) && (win instanceof Window)) {
-    win.center();
-    win.show();
-} // end if win  null and not a instance of window 
-
-/**
- * the User interface
- * @param  {[type]} thisObj [description]
- * @return {Panel}         [description]
- */
- function buildUI (thisObj  ) {
-
-        var H = 25; // the height
-        var W = 40; // the width
-        var G = 5; // the gutter
-        var x = G;
-        var y = G;
-        var rows = 6;
-        var columns = 5;
-    var win = (thisObj instanceof Panel) ? thisObj :  new Window('palette', 'Bitmaoboogie Imagescanner',[0,0,W*columns+ 2*G,H*rows + 2*G],{resizeable: true});
-
-    if (win !== null) {
-
-        win.read_it_button = win.add('button',[x ,y,x+W*5,y + H],'read it');
-        x=G;
-        y+=(H*1)+G;
-        win.textfield = win.add('edittext',[x,y,x+W*5,y+H*4],'',{multiline:true});
-        x=G;
-        y+=(H*4) + G;
-        win.steps_etext = win.add('edittext',[x ,y,(x+W*2) - (G/2),y + H],bb_data.stepval);
-        x = (x+W*2) + (G/2);
-        win.do_it_button = win.add('button', [x ,y,x+W*3,y + H], 'do it');
-
-        win.steps_etext.onChange = function  () {
-
-          var buff = bb_data.stepval;
-            bb_data.stepval = parseInt(this.text,10);//parseTextToFloat(this.value, , 1, 100000000,1);
-            if(isNaN(bb_data.stepval)){
-                alert('Sorry this is not a integer point value\nReset to '+buff);
-                this.text = buff;
-                bb_data.stepval = buff;
-            }
-        };
-        win.read_it_button.onClick = function  () {
-          importdata();
-          if(bb_data.imagecolors.length < 1){
-
-          alert("The import did not work :(");
-          }else{
-            alert("woohoo! \\o/ the import went fine. I got " +bb_data.imagecolors.length+ " color values");
-          }
-        };
-        win.textfield.onChange = function  () {
-          bb_data.text = this.text;
-        };
-        win.do_it_button.onClick = function () {
-          if(bb_data.text.length < 1){
-            alert("you need to enter some text first");
-            return;
-          }
-          var numoflayers = Math.floor(bb_data.imagecolors.length / bb_data.stepval);
-          if(numoflayers > 300){
-            var res = confirm("Uh. This with a step value of " + bb_data.stepval+ " and "+ bb_data.imagecolors.length +" this will result in " + numoflayers +" layers. Are you sure you want to do this?\n if not please enter a higher value into the step textfield",true,"To many layers?");
-            if(res === true){
-              runit();
-            }else{
-              return;
-            }
-          }else{
-            runit();
-          }
-
-      };
-
-    }
-    return win;
-}
-
-/**
- * imports the data and adds them to the global object
- * 
- * @return nothing
- */
-function importdata(){
-  var lines = read_in_txt();
-  // alert(lines);
-  var raw_data = lines.join("");
-  // alert(raw_data);
-  var json = eval("(" + raw_data + ")");
-  var resol = json.scanresolution;
-  bb_data.scanres = json.scanresolution;
-  bb_data.imagewidth = json.width;
-  bb_data.imageheight = json.height;
-  var progress_win = new Window ("palette");
-
-var progress = progress_bar(progress_win, json.colors.length, 'Importing data. Please be patient');
- for(var i = 0; i < json.colors.length;i++){
-bb_data.imagecolors.push(json.colors[i]);
-      progress.value = i+1;
- }
-    progress.parent.close();
-
-return 0;
-}
-/**
- * Taken from ScriptUI by Peter Kahrel
- * 
- * @param  {Palette} w    the palette the progress is shown on
- * @param  {[type]} stop [description]
- * @return {[type]}      [description]
- */
-function progress_bar (w, stop, labeltext) {
-var txt = w.add('statictext',undefined,labeltext);
-var pbar = w.add ("progressbar", undefined, 1, stop); pbar.preferredSize = [300,20];
-w.show ();
-return pbar;
-}
-
-/**
- * run the action
- * @return nothing
- */
-function runit(){
-// "in function main. From here on it is a straight run"
-// 
-
-    var curComp = app.project.activeItem;
-   if (!curComp || !(curComp instanceof CompItem)){
-        alert('please select a comp');
-        return;
-    }
-    app.beginUndoGroup('bitmapboogie imagescanner');
-    var reg = new RegExp ("\\.","g");
-    var cleandwordstring = bb_data.text.replace(reg,"");
-    var words = cleandwordstring.split(' ');
-
-var progress_win = new Window ("palette");
-var progress = progress_bar(progress_win,bb_data.imagecolors.length, 'Placing Text. This may take a while');
-
-    for(var i = 0; i < bb_data.imagecolors.length; i+=bb_data.stepval){
-      var current_word = words[i%words.length];
-      var x = bb_data.imagecolors[i].x;
-      var y = bb_data.imagecolors[i].y;
-      var r = bb_data.imagecolors[i].rgba[0];
-      var g = bb_data.imagecolors[i].rgba[1];
-      var b = bb_data.imagecolors[i].rgba[2];
-      var a = bb_data.imagecolors[i].rgba[3];
-      writeLn(String(i +"/"+bb_data.imagecolors.length));
-      if(a === 0){
-        continue;
-      }
-      var average = (r+ g +b) / 3;
-      // if(average < 128){
-      //   continue;
-      // }
-
-      var curtl = curComp.layers.addText(current_word);
-      curtl.transform.position.setValue([x,y]);
-            progress.value = i+1;
-
-    }
-    progress.parent.close();
-
-    app.endUndoGroup();
-  return 0;
-  }
-
-  /**
- * this reads in a file 
- * line by line
- * @return {Array of String}
- */
-function read_in_txt(){
-
-  var textFile = File.openDialog("Select a text file to import.", "*.*",false);
-
-
-
-        var textLines = [];
-    if (textFile !== null) {
-        textFile.open('r', undefined, undefined);
-        while (!textFile.eof){
-            textLines[textLines.length] = textFile.readln();
-        }
-
-        textFile.close();
-    }
-
-    if(!textLines){
-        alert("ERROR Reading file");
-        return null;
-    }else{
-
-    return textLines;
-    }
-  }
-}// close bb_imagescanner
-
-})(this);
+﻿// this script is written// for Bitmaoboogie and [Reporter Ohne Grenzen]// // Copyright (c)  2013// Fabian "fabiantheblind" Morón Zirfas// Permission is hereby granted, free of charge, to any// person obtaining a copy of this software and associated// documentation files (the "Software"), to deal in the Software// without restriction, including without limitation the rights// to use, copy, modify, merge, publish, distribute, sublicense,// and/or sell copies of the Software, and to  permit persons to// whom the Software is furnished to do so, subject to// the following conditions:// The above copyright notice and this permission notice// shall be included in all copies or substantial portions of the Software.// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF  CONTRACT,// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTIO// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.// see also http://www.opensource.org/licenses/mit-license.php(function(thisObj){// basic panelbb_imagescanner(thisObj); function bb_imagescanner(thisObj){// this is globalbb_data =  {  'text_kw':"",  'text_fw':"",  'kw_min':200,  'kw_max':400,  'fw_min':90,  'fw_max':130,  'scanres':null,  'imagecolors':[],  'stepval':20,  'imagewidth':0,  'imageheight':0,  'words':[],  'ipsum':"Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",  'hw':"Hello World"};bb_data.text_kw = bb_data.hw; // this is for debugging fasterbb_data.text_fw = bb_data.ipsum; // this is for debugging faster///   THIS WILL CHECK IF PANEL IS DOCKABLE OR FLAOTING WINDOW  var win   = buildUI(thisObj );if ((win !== null) && (win instanceof Window)) {    win.center();    win.show();} // end if win  null and not a instance of window /** * the User interface * @param  {[type]} thisObj [description] * @return {Panel}         [description] */ function buildUI (thisObj  ) {        var H = 25; // the height        var W = 40; // the width        var G = 5; // the gutter        var x = G;        var y = G;        var rows = 13;        var columns = 5;    var win = (thisObj instanceof Panel) ? thisObj :  new Window('palette', 'Bitmaoboogie Imagescanner',[0,0,W*columns+ 2*G,H*rows + 2*G + G*rows],{resizeable: true});    if (win !== null) {        win.read_it_button = win.add('button',[x ,y,x+W*2 ,y + H],'read it');        // x+=W*4 +(G);        // win.keywords_button = win.add('button',[x,y,x+W*1,y+H],'KW');        x+= (W*2) + G;        win.steps_etext = win.add('edittext',[x ,y,(x+W*1) ,y + H],bb_data.stepval);        x+= (W*1) + (G);        win.do_it_button = win.add('button', [x ,y,x+W*3+G*2,y + H], 'do it');        x=G;        y+=(H*1)+G; // ------------ KEYWORDS ------------        win.label_kw = win.add('statictext',[x,y+G,x+W*2,y+H],'Keywords');        x+=W*2+G;        win.label_kw_min = win.add('statictext',[x,y+G,x+W*1,y+H],'min:');        x+=W*1+G;        win.textfield_kw_min = win.add('edittext',[x,y,x+W*1,y+H],bb_data.kw_min);        x+=W*1+G;        win.label_kw_max = win.add('statictext',[x,y+G,x+W*1,y+H],'max:');        x+=W*1+G;        win.textfield_kw_max = win.add('edittext',[x,y,x+W*1,y+H],bb_data.kw_max);        x=G;        y+=(H*1)+G;        win.textfield_kw = win.add('edittext',[x,y,x+W*6+G*4,y+H*4],bb_data.hw,{multiline:true}); // ------------ FILLWORDS ------------        x=G;        y+=(H*4)+G;        win.label_fw = win.add('statictext',[x,y+G,x+W*2,y+H],'Fillwords');        x+=W*2+G;        win.label_fw_min = win.add('statictext',[x,y+G,x+W*1,y+H],'min:');        x+=W*1+G;        win.textfield_fw_min = win.add('edittext',[x,y,x+W*1,y+H],bb_data.fw_min);        x+=W*1+G;        win.label_fw_max = win.add('statictext',[x,y+G,x+W*1,y+H],'max:');        x+=W*1+G;        win.textfield_fw_max = win.add('edittext',[x,y,x+W*1,y+H],bb_data.fw_max);        x=G;        y+=(H*1)+G;        win.textfield_fw = win.add('edittext',[x,y,x+W*6+G*4,y+H*4],bb_data.ipsum,{multiline:true});        win.textfield_kw_min.onChange = function  () {                    var buff = bb_data.kw_min;            bb_data.kw_min = parseInt(this.text,10);            if(isNaN(bb_data.kw_min)){                alert('Sorry this is not a integer point value\nReset to '+buff);                this.text = buff;                bb_data.kw_min = buff;            }            if(bb_data.kw_min > bb_data.kw_max){              alert("Your minimum higher than your maximum?\nThis is impossible I will crank up your max value");        win.textfield_kw_max.text = bb_data.kw_min + 1;        bb_data.kw_max =  bb_data.kw_min + 1;            }        };        win.textfield_kw_max.onChange = function  () {                    var buff = bb_data.kw_max;            bb_data.kw_max = parseInt(this.text,10);            if(isNaN(bb_data.kw_max)){                alert('Sorry this is not a integer point value\nReset to '+buff);                this.text = buff;                bb_data.kw_max = buff;            }            if(bb_data.kw_max < bb_data.kw_min){              alert("Your maximum lower than your minimum?\nThis is impossible I will pull down your min value");        win.textfield_kw_min.text = bb_data.kw_max - 1;        bb_data.kw_min =  bb_data.kw_max - 1;            }        };        win.textfield_fw_min.onChange = function  () {                    var buff = bb_data.fw_min;            bb_data.fw_min = parseInt(this.text,10);            if(isNaN(bb_data.fw_min)){                alert('Sorry this is not a integer point value\nReset to '+buff);                this.text = buff;                bb_data.fw_min = buff;            }            if(bb_data.fw_min > bb_data.fw_max){              alert("Your minimum higher than your maximum?\nThis is impossible I will crank up your max value");        win.textfield_fw_max.text = bb_data.fw_min + 1;        bb_data.fw_max =  bb_data.fw_min + 1;            }        };        win.textfield_fw_max.onChange = function  () {                    var buff = bb_data.fw_max;            bb_data.fw_max = parseInt(this.text,10);            if(isNaN(bb_data.fw_max)){                alert('Sorry this is not a integer point value\nReset to '+buff);                this.text = buff;                bb_data.fw_max = buff;            }            if(bb_data.fw_max < bb_data.fw_min){              alert("Your maximum lower than your minimum?\nThis is impossible I will pull down your min value");        win.textfield_fw_min.text = bb_data.fw_max - 1;        bb_data.fw_min =  bb_data.fw_max - 1;            }        };        win.steps_etext.onChange = function  () {          var buff = bb_data.stepval;            bb_data.stepval = parseInt(this.text,10);            if(isNaN(bb_data.stepval)){                alert('Sorry this is not a integer point value\nReset to '+buff);                this.text = buff;                bb_data.stepval = buff;            }        };        win.read_it_button.onClick = function  () {          importdata();          if(bb_data.imagecolors.length < 1){          alert("The import did not work :(");          }else{            alert("woohoo! \\o/ the import went fine. I got " +bb_data.imagecolors.length+ " color values");          }        };        win.textfield_kw.onChange = function  () {          bb_data.text_kw = this.text;        };        win.textfield_fw.onChange = function  () {          bb_data.text_fw = this.text;        };        win.do_it_button.onClick = function () {          if(bb_data.text_kw.length < 1){            alert("you need to enter some text first");            return;          }          var numoflayers = Math.floor(bb_data.imagecolors.length / bb_data.stepval);          if(numoflayers > 300){            var res = confirm("Uh. This with a step value of " + bb_data.stepval+ " and "+ bb_data.imagecolors.length +" this will result in " + numoflayers +" layers. Are you sure you want to do this?\n if not please enter a higher value into the step textfield_kw",true,"To many layers?");            if(res === true){              runit();            }else{              return;            }          }else{            runit();          }      };    }    return win;}/** * imports the data and adds them to the global object *  * @return nothing */function importdata(){  var lines = read_in_txt();  // alert(lines);  var raw_data = lines.join("");  // alert(raw_data);  // progress_win.children[0].text = "Evaluating Json data";  var json = eval("(" + raw_data + ")");  var progress_win = new Window ("palette");var progress = progress_bar(progress_win, json.colors.length, 'Importing data. Please be patient');// progress_win.children[0].text = "Reading lines";  var resol = json.scanresolution;  bb_data.scanres = json.scanresolution;  bb_data.imagewidth = json.width;  bb_data.imageheight = json.height;// progress_win.children[0].text = "Creating Dataset. Please be patient"; for(var i = 0; i < json.colors.length;i++){bb_data.imagecolors.push(json.colors[i]);      progress.value = i+1; }    progress.parent.close();return 0;}/** * Taken from ScriptUI by Peter Kahrel *  * @param  {Palette} w    the palette the progress is shown on * @param  {[type]} stop [description] * @return {[type]}      [description] */function progress_bar (w, stop, labeltext) {var txt = w.add('statictext',undefined,labeltext);var pbar = w.add ("progressbar", undefined, 1, stop); pbar.preferredSize = [300,20];w.show ();return pbar;}/** * run the action * @return nothing */function runit(){// "in function main. From here on it is a straight run"//     var curComp = app.project.activeItem;   if (!curComp || !(curComp instanceof CompItem)){        alert('please select a comp');        return;    }    var kw_range = bb_data.kw_max - bb_data.kw_min;    var fw_range = bb_data.fw_max - bb_data.fw_min;    bb_data.words.length = 0;    setup_words(bb_data.text_kw,0);    setup_words(bb_data.text_fw,1);    // alert(bb_data.words.toString());    fisherYates_randomize(bb_data.words);    // alert(bb_data.words.toString());    app.beginUndoGroup('bitmapboogie imagescanner');var progress_win = new Window ("palette");var progress = progress_bar(progress_win,bb_data.imagecolors.length, 'Placing Text. This may take a while');var accessindex = 0;    for(var i = 0; i < bb_data.imagecolors.length; i+=bb_data.stepval){      var curr_word = bb_data.words[accessindex];      if(accessindex < bb_data.words.length -1){        accessindex++;      }else{        accessindex = 0;      }      var x = bb_data.imagecolors[i].x;      var y = bb_data.imagecolors[i].y;      var r = bb_data.imagecolors[i].rgba[0];      var g = bb_data.imagecolors[i].rgba[1];      var b = bb_data.imagecolors[i].rgba[2];      var a = bb_data.imagecolors[i].rgba[3];      writeLn(String(curr_word.content));      if(a === 0){        continue;      }      var average = (r+ g +b) / 3;      // if(average < 128){      //   continue;      // }      var curtl = curComp.layers.addText(curr_word.content);      if(curr_word.type === 0){        //keyword processing        var val_kw = bb_data.kw_min + Math.random()*kw_range;        curtl.transform.scale.setValue([val_kw,val_kw]);        curtl.comment = "*keyword";        try{curtl.label = 7;}catch(err){/*works only in CS6?*/}      }else if(curr_word.type === 1){        //fillword processing        var val_fw = bb_data.fw_min + Math.random()*fw_range;        curtl.transform.scale.setValue([val_fw, val_fw]);        curtl.comment = "*fillword";      }      curtl.transform.position.setValue([x,y]);            progress.value = i+1;    }    progress.parent.close();    app.endUndoGroup();  return 0;  }/** * found here  * http://stackoverflow.com/questions/2450954/how-to-randomize-a-javascript-array * original source here * http://sedition.com/perl/javascript-fy.html *  * [fisherYates_randomize description] *  * @param  {[type]} myArray [description] * @return {[type]}         [description] */function fisherYates_randomize ( myArray ) {  var i = myArray.length;  if ( i === 0 ) return false;  while ( i-- ) {     var j = Math.floor( Math.random() * ( i + 1 ) );     var tempi = myArray[i];     var tempj = myArray[j];     myArray[i] = tempj;     myArray[j] = tempi;   }}function  setup_words(str, type){    var reg = new RegExp ("\\.","g");    var cleandwordstring = str.replace(reg,"");    var that_words = cleandwordstring.split(' ');    for(var i =0; i < that_words.length;i++){      bb_data.words.push({'type':type,'content':that_words[i]});    }}  /** * this reads in a file  * line by line * @return {Array of String} */function read_in_txt(){  var textFile = File.openDialog("Select a text file to import.", "*.*",false);        var textLines = [];    if (textFile !== null) {        textFile.open('r', undefined, undefined);        while (!textFile.eof){            textLines[textLines.length] = textFile.readln();        }        textFile.close();    }    if(!textLines){        alert("ERROR Reading file");        return null;    }else{    return textLines;    }  }}// close bb_imagescanner})(this);
